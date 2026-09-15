@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eks-upgrade-state-{{ .Values.clusterName | lower | replace "." "-" }}
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: eks-upgrade-monitor
+    eks.amazonaws.com/cluster: {{ .Values.clusterName | quote }}
+data:
+  desiredVersion: {{ .Values.targetVersion | quote }}
+  environment: {{ .Values.environment | quote }}
+  managedBy: "gitops-argocd"

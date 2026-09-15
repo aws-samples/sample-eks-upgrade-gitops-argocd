@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dev-cluster-config
+  namespace: argocd
+  labels:
+    environment: dev
+    managed-by: argocd
+data:
+  cluster_name: "my-eks-cluster"
+  kubernetes_version: "1.32"
+  aws_region: "us-east-1"
+  environment: "dev"
+  node_group_min_size: "2"
+  node_group_max_size: "4"
+  node_group_desired_size: "2"
+  coredns_version: "v1.11.4-eksbuild.51"
+  kube_proxy_version: "v1.32.13-eksbuild.24"
+  vpc_cni_version: "v1.23.0-eksbuild.1"
+  ebs_csi_version: "v1.65.0-eksbuild.1"
+  auto_sync: "true"
+  upgrade_window: "weekday"

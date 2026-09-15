@@ -1,0 +1,6 @@
+apiVersion: v2
+name: eks-upgrade-monitor
+description: Tracks desired EKS cluster version state for ArgoCD drift detection
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

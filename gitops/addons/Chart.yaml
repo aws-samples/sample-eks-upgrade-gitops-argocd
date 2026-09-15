@@ -1,0 +1,5 @@
+apiVersion: v2
+name: eks-cluster-addons
+description: Desired-state tracking for EKS managed addon versions. ArgoCD manages this ConfigMap as the source of truth; GitHub Actions reads it to drive aws eks update-addon calls.
+version: 1.0.0
+type: application
