@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: eks-upgrade-monitor
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        # Replace with your own fork of this repository before applying.
+        repoURL: https://github.com/<your-org>/eks-upgrade-gitops-argocd
+        revision: HEAD
+        files:
+          - path: "gitops/clusters/*/cluster-config.yaml"
+  template:
+    metadata:
+      name: "{{data.cluster_name}}-upgrade-monitor"
+      annotations:
+        argocd.argoproj.io/sync-wave: "1"
+      labels:
+        environment: "{{data.environment}}"
+        target-k8s-version: "{{data.kubernetes_version}}"
+    spec:
+      project: eks-upgrades
+      source:
+        # Replace with your own fork of this repository before applying.
+        repoURL: https://github.com/<your-org>/eks-upgrade-gitops-argocd
+        targetRevision: HEAD
+        path: "gitops/upgrade-monitor"
+        helm:
+          parameters:
+            - name: clusterName
+              value: "{{data.cluster_name}}"
+            - name: targetVersion
+              value: "{{data.kubernetes_version}}"
+            - name: environment
+              value: "{{data.environment}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: kube-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - ServerSideApply=true

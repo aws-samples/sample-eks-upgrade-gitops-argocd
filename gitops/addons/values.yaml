@@ -1,0 +1,8 @@
+data:
+  cluster_name: ""
+  kubernetes_version: "1.32"
+  coredns_version: "v1.11.4-eksbuild.51"
+  kube_proxy_version: "v1.32.13-eksbuild.24"
+  vpc_cni_version: "v1.23.0-eksbuild.1"
+  ebs_csi_version: "v1.65.0-eksbuild.1"
+  environment: "dev"

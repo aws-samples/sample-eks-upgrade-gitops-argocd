@@ -1,0 +1,61 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: eks-cluster-addons
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        # Replace with your own fork of this repository before applying.
+        repoURL: https://github.com/<your-org>/eks-upgrade-gitops-argocd
+        revision: HEAD
+        files:
+          - path: "gitops/clusters/*/cluster-config.yaml"
+  template:
+    metadata:
+      name: "{{data.environment}}-cluster-addons"
+      labels:
+        environment: "{{data.environment}}"
+        managed-by: argocd
+        component: cluster-addons
+    spec:
+      project: eks-upgrades
+      source:
+        # Replace with your own fork of this repository before applying.
+        repoURL: https://github.com/<your-org>/eks-upgrade-gitops-argocd
+        targetRevision: HEAD
+        path: "gitops/addons"
+        helm:
+          parameters:
+            - name: data.cluster_name
+              value: "{{data.cluster_name}}"
+            - name: data.kubernetes_version
+              value: "{{data.kubernetes_version}}"
+            - name: data.coredns_version
+              value: "{{data.coredns_version}}"
+            - name: data.kube_proxy_version
+              value: "{{data.kube_proxy_version}}"
+            - name: data.vpc_cni_version
+              value: "{{data.vpc_cni_version}}"
+            - name: data.ebs_csi_version
+              value: "{{data.ebs_csi_version}}"
+            - name: data.environment
+              value: "{{data.environment}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: kube-system
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m
+      revisionHistoryLimit: 5

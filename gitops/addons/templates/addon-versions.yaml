@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eks-addon-desired-versions-{{ .Values.data.cluster_name | default "cluster" | lower | replace "_" "-" | replace "." "-" }}
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: eks-cluster-addons
+    eks.amazonaws.com/cluster: {{ .Values.data.cluster_name | default "" | quote }}
+    environment: {{ .Values.data.environment | default "" | quote }}
+data:
+  coredns: {{ .Values.data.coredns_version | default "" | quote }}
+  kube-proxy: {{ .Values.data.kube_proxy_version | default "" | quote }}
+  vpc-cni: {{ .Values.data.vpc_cni_version | default "" | quote }}
+  aws-ebs-csi-driver: {{ .Values.data.ebs_csi_version | default "" | quote }}
+  kubernetes-version: {{ .Values.data.kubernetes_version | default "" | quote }}
+  environment: {{ .Values.data.environment | default "" | quote }}

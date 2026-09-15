@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: staging-cluster-config
+  namespace: argocd
+  labels:
+    environment: staging
+    managed-by: argocd
+data:
+  note: "demo-only-multi-cluster-not-deployed"
+  cluster_name: "eks-staging-cluster"
+  kubernetes_version: "1.31"
+  aws_region: "us-east-1"
+  environment: "staging"
+  node_group_min_size: "2"
+  node_group_max_size: "6"
+  node_group_desired_size: "3"
+  coredns_version: "v1.11.3-eksbuild.1"
+  kube_proxy_version: "v1.31.2-eksbuild.3"
+  vpc_cni_version: "v1.18.5-eksbuild.1"
+  ebs_csi_version: "v1.36.0-eksbuild.1"
+  auto_sync: "false"
+  upgrade_window: "weekend"
