@@ -320,7 +320,7 @@ jobs:
           terraform apply \
             -auto-approve \
             -target=module.eks.aws_eks_cluster.this \
-            -target=module.eks.aws_eks_managed_node_group.this \
+            -target='module.eks.module.eks_managed_node_group["primary"]' \
             -var-file="environments/${{ steps.env.outputs.environment }}.tfvars"
 
       - name: Extract cluster info from Terraform output
