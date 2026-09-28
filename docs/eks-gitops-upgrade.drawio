@@ -81,26 +81,26 @@
         </mxCell>
 
         <!-- EKS Control Plane -->
-        <mxCell id="eks-group" style="fillColor=#FFF2E8;strokeColor=#ED7100;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#ED7100;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Containers" vertex="1" parent="1">
+        <mxCell id="eks-group" style="fillColor=#EBF3FB;strokeColor=#326DE6;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#326DE6;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Kubernetes" vertex="1" parent="1">
           <mxGeometry x="660" y="260" height="120" width="120" as="geometry" />
         </mxCell>
-        <mxCell id="eks-icon" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.eks;fontFamily=Helvetica;shadow=1;" value="Amazon EKS&lt;div&gt;&lt;i&gt;Control Plane&lt;/i&gt;&lt;/div&gt;" vertex="1" parent="eks-group">
+        <mxCell id="eks-icon" style="shape=mxgraph.kubernetes2.control_plane;fillColor=#326DE6;strokeColor=none;fontColor=#232F3E;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;fontFamily=Helvetica;shadow=1;" value="Amazon EKS&lt;div&gt;&lt;i&gt;Control Plane&lt;/i&gt;&lt;/div&gt;" vertex="1" parent="eks-group">
           <mxGeometry x="36" y="30" width="48" height="48" as="geometry" />
         </mxCell>
 
         <!-- EKS Managed Node Groups -->
-        <mxCell id="nodegroup-group" style="fillColor=#FFF2E8;strokeColor=#ED7100;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#ED7100;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Containers" vertex="1" parent="1">
+        <mxCell id="nodegroup-group" style="fillColor=#EBF3FB;strokeColor=#326DE6;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#326DE6;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Kubernetes" vertex="1" parent="1">
           <mxGeometry x="980" y="260" height="120" width="120" as="geometry" />
         </mxCell>
-        <mxCell id="nodegroup-icon" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.eks;fontFamily=Helvetica;shadow=1;" value="Managed Node Groups&lt;div&gt;&lt;i&gt;rolling AMI update&lt;/i&gt;&lt;/div&gt;" vertex="1" parent="nodegroup-group">
+        <mxCell id="nodegroup-icon" style="shape=mxgraph.kubernetes2.node;fillColor=#326DE6;strokeColor=none;fontColor=#232F3E;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;fontFamily=Helvetica;shadow=1;" value="Managed Node Groups&lt;div&gt;&lt;i&gt;rolling AMI update&lt;/i&gt;&lt;/div&gt;" vertex="1" parent="nodegroup-group">
           <mxGeometry x="36" y="30" width="48" height="48" as="geometry" />
         </mxCell>
 
         <!-- ArgoCD (non-AWS, running inside EKS cluster) -->
-        <mxCell id="argocd-group" style="fillColor=#FFF2E8;strokeColor=#ED7100;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#ED7100;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="Compute" vertex="1" parent="1">
+        <mxCell id="argocd-group" style="fillColor=#EBF3FB;strokeColor=#326DE6;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#326DE6;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" value="GitOps" vertex="1" parent="1">
           <mxGeometry x="820" y="530" height="120" width="120" as="geometry" />
         </mxCell>
-        <mxCell id="argocd-icon" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.containers;fontFamily=Helvetica;shadow=1;" value="ArgoCD&lt;div&gt;&lt;i&gt;add-on version sync&lt;/i&gt;&lt;/div&gt;" vertex="1" parent="argocd-group">
+        <mxCell id="argocd-icon" style="shape=mxgraph.kubernetes2.deploy;fillColor=#326DE6;strokeColor=none;fontColor=#232F3E;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;fontFamily=Helvetica;shadow=1;" value="ArgoCD&lt;div&gt;&lt;i&gt;add-on version sync&lt;/i&gt;&lt;/div&gt;" vertex="1" parent="argocd-group">
           <mxGeometry x="36" y="30" width="48" height="48" as="geometry" />
         </mxCell>
 
