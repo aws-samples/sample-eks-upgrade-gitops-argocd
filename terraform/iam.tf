@@ -34,12 +34,10 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Scope trust to pushes and pull requests from the specific GitOps repository.
-    # Replace with your organization and repository name.
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:aws-samples/sample-eks-upgrade-gitops-argocd:*"]
+      values   = ["repo:${var.github_actions_repo}:*"]
     }
   }
 }
@@ -89,23 +87,8 @@ data "aws_iam_policy_document" "github_actions_eks_upgrade_permissions" {
       "s3:GetBucketVersioning",
     ]
     resources = [
-      "arn:aws:s3:::${var.cluster_name}-tf-state",
-      "arn:aws:s3:::${var.cluster_name}-tf-state/*",
-    ]
-  }
-
-  # DynamoDB permissions for Terraform state locking.
-  statement {
-    sid    = "TerraformStateLock"
-    effect = "Allow"
-    actions = [
-      "dynamodb:GetItem",
-      "dynamodb:PutItem",
-      "dynamodb:DeleteItem",
-      "dynamodb:DescribeTable",
-    ]
-    resources = [
-      "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/terraform-state-lock",
+      "arn:aws:s3:::${var.tf_state_bucket}",
+      "arn:aws:s3:::${var.tf_state_bucket}/*",
     ]
   }
 

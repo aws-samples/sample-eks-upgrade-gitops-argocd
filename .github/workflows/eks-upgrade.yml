@@ -1,0 +1,491 @@
+name: EKS Cluster Upgrade
+
+on:
+  pull_request:
+    branches: [main, staging, prod]
+    paths:
+      - "gitops/clusters/**/cluster-config.yaml"
+      - "terraform/**"
+  push:
+    branches: [main, staging, prod]
+    paths:
+      - "gitops/clusters/**/cluster-config.yaml"
+      - "terraform/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+env:
+  # AWS_REGION is non-sensitive configuration. Store it as a GitHub Actions
+  # Variable (vars.*) rather than a Secret so it can be used at workflow scope
+  # without triggering the gha-workflow-env-secret rule.
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  TF_WORKING_DIR: terraform
+  PLUTO_VERSION: "5.19.4"
+  ARGOCD_CLI_VERSION: "v3.0.5"
+  # Pass required Terraform variables that have no defaults.
+  TF_VAR_github_actions_repo: ${{ github.repository }}
+  TF_VAR_tf_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+
+jobs:
+  validate:
+    name: Pre-Upgrade Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install pluto
+        run: |
+          curl -sSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz pluto
+          chmod +x pluto
+          sudo mv pluto /usr/local/bin/
+
+      - name: Detect changed cluster config files
+        id: changed-files
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          git fetch origin "${BASE_REF}" 2>/dev/null || true
+          CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" \
+            | grep 'gitops/clusters/.*/cluster-config.yaml' || true)
+          if [ -z "$CHANGED" ]; then
+            CHANGED=$(git show --name-only HEAD | grep 'gitops/clusters/.*/cluster-config.yaml' || true)
+          fi
+          echo "changed_configs<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Extract target Kubernetes version from changed config
+        id: target-version
+        run: |
+          CONFIGS="${{ steps.changed-files.outputs.changed_configs }}"
+          CONFIGS=$(echo "$CONFIGS" | tr -s ' \n' '\n' | grep -v '^$' || true)
+          if [ -z "$CONFIGS" ]; then
+            echo "No cluster-config.yaml changed, skipping version extract."
+            exit 0
+          fi
+          while IFS= read -r config_file; do
+            [ -f "$config_file" ] || continue
+            VERSION=$(grep 'kubernetes_version' "$config_file" | awk -F'"' '{print $2}')
+            echo "Target version in $config_file: $VERSION"
+            echo "target_version=$VERSION" >> $GITHUB_OUTPUT
+          done <<< "$CONFIGS"
+
+      - name: Determine environment from branch
+        id: env
+        env:
+          REF_NAME: ${{ github.base_ref || github.ref_name }}
+        run: |
+          BRANCH="${REF_NAME}"
+          case "$BRANCH" in
+            main)    echo "environment=dev" >> $GITHUB_OUTPUT ;;
+            staging) echo "environment=staging" >> $GITHUB_OUTPUT ;;
+            prod)    echo "environment=prod" >> $GITHUB_OUTPUT ;;
+            *)       echo "environment=dev" >> $GITHUB_OUTPUT ;;
+          esac
+
+      - name: Update kubeconfig for target cluster
+        run: |
+          CLUSTER_NAME=$(grep 'cluster_name' \
+            gitops/clusters/${{ steps.env.outputs.environment }}/cluster-config.yaml \
+            | awk -F'"' '{print $2}')
+          aws eks update-kubeconfig \
+            --region "$AWS_REGION" \
+            --name "$CLUSTER_NAME"
+
+      - name: Scan for deprecated Kubernetes APIs with pluto
+        id: pluto-scan
+        run: |
+          TARGET_VERSION="${{ steps.target-version.outputs.target_version }}"
+          if [ -z "$TARGET_VERSION" ]; then
+            echo "No version change detected, skipping API deprecation scan."
+            exit 0
+          fi
+          echo "Scanning for APIs deprecated or removed in Kubernetes $TARGET_VERSION..."
+          PLUTO_OUTPUT=$(pluto detect-helm \
+            --target-versions "k8s=v${TARGET_VERSION}.0" \
+            -o wide 2>&1 || true)
+          echo "$PLUTO_OUTPUT"
+          if echo "$PLUTO_OUTPUT" | grep -q "REMOVED: true"; then
+            echo "pluto_status=FAIL" >> $GITHUB_OUTPUT
+          else
+            echo "pluto_status=PASS" >> $GITHUB_OUTPUT
+          fi
+          echo "pluto_output<<EOF" >> $GITHUB_OUTPUT
+          echo "$PLUTO_OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.13.0"
+
+      - name: Terraform format check
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Post validation summary as PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const plutoStatus = '${{ steps.pluto-scan.outputs.pluto_status }}';
+            const plutoOutput = `${{ steps.pluto-scan.outputs.pluto_output }}`;
+            const statusEmoji = plutoStatus === 'PASS' ? '✅' : '❌';
+            const body = `## Pre-Upgrade Validation Results
+
+            **API Deprecation Scan (pluto):** ${statusEmoji} ${plutoStatus}
+
+            <details>
+            <summary>pluto output</summary>
+
+            \`\`\`
+            ${plutoOutput}
+            \`\`\`
+            </details>
+
+            **Terraform fmt:** ✅ PASS
+            **Terraform validate:** ✅ PASS
+
+            ${plutoStatus === 'FAIL' ? '⚠️ **Action required:** Deprecated APIs detected. Fix workloads before merging this upgrade.' : ''}
+            `;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Determine environment from branch
+        id: env
+        env:
+          REF_NAME: ${{ github.base_ref || github.ref_name }}
+        run: |
+          BRANCH="${REF_NAME}"
+          case "$BRANCH" in
+            main)    echo "environment=dev" >> $GITHUB_OUTPUT ;;
+            staging) echo "environment=staging" >> $GITHUB_OUTPUT ;;
+            prod)    echo "environment=prod" >> $GITHUB_OUTPUT ;;
+            *)       echo "environment=dev" >> $GITHUB_OUTPUT ;;
+          esac
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.13.0"
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=eks-upgrade-gitops/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION"
+
+      - name: Terraform plan
+        id: plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform plan \
+            -out=tfplan \
+            -var-file="environments/${{ steps.env.outputs.environment }}.tfvars" \
+            -no-color 2>&1 | tee plan_output.txt
+          PLAN_CONTENT=$(cat plan_output.txt)
+          echo "plan_output<<EOF" >> $GITHUB_OUTPUT
+          echo "$PLAN_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tfplan-${{ steps.env.outputs.environment }}-${{ github.sha }}
+          path: ${{ env.TF_WORKING_DIR }}/tfplan
+          retention-days: 1
+
+      - name: Post Terraform plan as PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const planOutput = `${{ steps.plan.outputs.plan_output }}`;
+            const body = `## Terraform Plan — \`${{ steps.env.outputs.environment }}\`
+
+            <details>
+            <summary>Show Plan</summary>
+
+            \`\`\`hcl
+            ${planOutput.substring(0, 60000)}
+            \`\`\`
+            </details>
+
+            **Review the plan above before approving this pull request.**
+            The plan must only show changes to \`cluster_version\` and node group AMI IDs for a version upgrade.
+            `;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: [validate, terraform-plan]
+    if: github.event_name == 'push'
+    environment: ${{ github.ref_name == 'main' && 'dev' || github.ref_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Determine environment
+        id: env
+        # github.ref_name is moved to an env var to prevent shell injection.
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          BRANCH="${REF_NAME}"
+          case "$BRANCH" in
+            main)    echo "environment=dev" >> $GITHUB_OUTPUT ;;
+            staging) echo "environment=staging" >> $GITHUB_OUTPUT ;;
+            prod)    echo "environment=prod" >> $GITHUB_OUTPUT ;;
+            *)       echo "environment=dev" >> $GITHUB_OUTPUT ;;
+          esac
+
+      - name: Run pre-upgrade checks
+        run: |
+          CLUSTER_NAME=$(grep 'cluster_name' \
+            gitops/clusters/${{ steps.env.outputs.environment }}/cluster-config.yaml \
+            | awk -F'"' '{print $2}')
+          TARGET_VERSION=$(grep 'kubernetes_version' \
+            gitops/clusters/${{ steps.env.outputs.environment }}/cluster-config.yaml \
+            | awk -F'"' '{print $2}')
+          aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
+          export CLUSTER_NAME TARGET_VERSION
+          bash scripts/pre-upgrade-checks.sh
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.13.0"
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=eks-upgrade-gitops/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION"
+
+      - name: Terraform apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform apply \
+            -auto-approve \
+            -target=module.eks.aws_eks_cluster.this \
+            -target=module.eks.aws_eks_managed_node_group.this \
+            -var-file="environments/${{ steps.env.outputs.environment }}.tfvars"
+
+      - name: Extract cluster info from Terraform output
+        id: cluster-info
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          CLUSTER_NAME=$(terraform output -raw cluster_name)
+          CLUSTER_VERSION=$(terraform output -raw cluster_version)
+          echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
+          echo "cluster_version=$CLUSTER_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Wait for cluster ACTIVE status
+        run: |
+          CLUSTER_NAME="${{ steps.cluster-info.outputs.cluster_name }}"
+          echo "Waiting for cluster $CLUSTER_NAME to reach ACTIVE status..."
+          for i in $(seq 1 40); do
+            STATUS=$(aws eks describe-cluster \
+              --name "$CLUSTER_NAME" \
+              --region "$AWS_REGION" \
+              --query 'cluster.status' \
+              --output text)
+            echo "Attempt $i/40: cluster status = $STATUS"
+            if [ "$STATUS" = "ACTIVE" ]; then
+              echo "Cluster is ACTIVE."
+              break
+            fi
+            if [ $i -eq 40 ]; then
+              echo "ERROR: Cluster did not reach ACTIVE status after 20 minutes."
+              exit 1
+            fi
+            sleep 30
+          done
+
+      - name: Wait for node groups ACTIVE status
+        run: |
+          CLUSTER_NAME="${{ steps.cluster-info.outputs.cluster_name }}"
+          NODE_GROUPS=$(aws eks list-nodegroups \
+            --cluster-name "$CLUSTER_NAME" \
+            --region "$AWS_REGION" \
+            --query 'nodegroups[]' \
+            --output text)
+          for ng in $NODE_GROUPS; do
+            echo "Waiting for node group $ng..."
+            for i in $(seq 1 40); do
+              STATUS=$(aws eks describe-nodegroup \
+                --cluster-name "$CLUSTER_NAME" \
+                --nodegroup-name "$ng" \
+                --region "$AWS_REGION" \
+                --query 'nodegroup.status' \
+                --output text)
+              echo "  Attempt $i/40: $ng status = $STATUS"
+              if [ "$STATUS" = "ACTIVE" ]; then
+                echo "  Node group $ng is ACTIVE."
+                break
+              fi
+              if [ $i -eq 40 ]; then
+                echo "ERROR: Node group $ng did not reach ACTIVE status."
+                exit 1
+              fi
+              sleep 30
+            done
+          done
+
+  argocd-sync:
+    name: ArgoCD Sync and Validate
+    runs-on: ubuntu-latest
+    needs: terraform-apply
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Determine environment
+        id: env
+        # github.ref_name is moved to an env var to prevent shell injection.
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          BRANCH="${REF_NAME}"
+          case "$BRANCH" in
+            main)    echo "environment=dev" >> $GITHUB_OUTPUT ;;
+            staging) echo "environment=staging" >> $GITHUB_OUTPUT ;;
+            prod)    echo "environment=prod" >> $GITHUB_OUTPUT ;;
+            *)       echo "environment=dev" >> $GITHUB_OUTPUT ;;
+          esac
+
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o /usr/local/bin/argocd \
+            "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_CLI_VERSION}/argocd-linux-amd64"
+          chmod +x /usr/local/bin/argocd
+
+      - name: Configure kubeconfig and port-forward ArgoCD
+        id: argocd-setup
+        run: |
+          CLUSTER_NAME=$(grep 'cluster_name' \
+            gitops/clusters/${{ steps.env.outputs.environment }}/cluster-config.yaml \
+            | awk -F'"' '{print $2}')
+          aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
+          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
+          kubectl port-forward svc/argocd-server -n argocd 8080:80 &
+          echo "ARGOCD_PF_PID=$!" >> $GITHUB_ENV
+          sleep 5
+          echo "ARGOCD_SERVER=localhost:8080" >> $GITHUB_ENV
+          echo "ARGOCD_AUTH_TOKEN=${{ secrets.ARGOCD_TOKEN }}" >> $GITHUB_ENV
+          echo "ARGOCD_OPTS=--plaintext" >> $GITHUB_ENV
+
+      - name: Sync cluster add-ons ApplicationSet
+        run: |
+          ENV="${{ steps.env.outputs.environment }}"
+          argocd app sync "${ENV}-cluster-addons" \
+            --prune=false \
+            --force \
+            --timeout 60
+
+      - name: Wait for cluster add-ons health
+        run: |
+          ENV="${{ steps.env.outputs.environment }}"
+          argocd app wait "${ENV}-cluster-addons" \
+            --health \
+            --timeout 300
+
+      - name: Sync upgrade monitor ApplicationSet
+        run: |
+          [ -n "$CLUSTER_NAME" ] || { echo "ERROR: CLUSTER_NAME not set"; exit 1; }
+          argocd app get "${CLUSTER_NAME}-upgrade-monitor" --hard-refresh 2>/dev/null || true
+          sleep 5
+          argocd app sync "${CLUSTER_NAME}-upgrade-monitor" --revision HEAD --timeout 60
+
+      - name: Update kubeconfig for post-upgrade validation
+        run: |
+          echo "kubeconfig already configured in argocd-setup step"
+
+      - name: Run post-upgrade validation
+        run: |
+          EXPECTED_VERSION=$(grep 'kubernetes_version' \
+            gitops/clusters/${{ steps.env.outputs.environment }}/cluster-config.yaml \
+            | awk -F'"' '{print $2}')
+          export EXPECTED_VERSION AWS_REGION
+          bash scripts/post-upgrade-validation.sh
+
+      - name: Send success notification
+        if: success()
+        run: |
+          ENV="${{ steps.env.outputs.environment }}"
+          VERSION=$(grep 'kubernetes_version' \
+            "gitops/clusters/${ENV}/cluster-config.yaml" | awk -F'"' '{print $2}')
+          aws sns publish \
+            --topic-arn "${{ secrets.SNS_NOTIFICATION_TOPIC_ARN }}" \
+            --subject "EKS Upgrade SUCCESS: ${ENV} -> Kubernetes ${VERSION}" \
+            --message "EKS cluster in ${ENV} upgraded to Kubernetes ${VERSION} successfully. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --region "$AWS_REGION" || true
+
+      - name: Send failure notification
+        if: failure()
+        run: |
+          ENV="${{ steps.env.outputs.environment }}"
+          aws sns publish \
+            --topic-arn "${{ secrets.SNS_NOTIFICATION_TOPIC_ARN }}" \
+            --subject "EKS Upgrade FAILED: ${ENV}" \
+            --message "EKS upgrade failed for ${ENV} environment. Investigate: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --region "$AWS_REGION" || true

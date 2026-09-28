@@ -6,11 +6,11 @@ variable "cluster_name" {
 variable "kubernetes_version" {
   description = "Target Kubernetes version for the EKS cluster. Changing this value and running terraform apply triggers the control plane upgrade. Must be a single-minor-version increment from the current cluster version."
   type        = string
-  default     = "1.32"
+  default     = "1.36"
 
   validation {
-    condition     = can(regex("^1\\.(2[89]|3[0-9])$", var.kubernetes_version))
-    error_message = "kubernetes_version must be a supported EKS version in the format 1.XX (for example, 1.29, 1.30, 1.31)."
+    condition     = can(regex("^1\\.[3-9][0-9]$", var.kubernetes_version))
+    error_message = "kubernetes_version must be a supported EKS version in the format 1.XX (for example, 1.34, 1.35, 1.36). Check the EKS release calendar for currently supported versions."
   }
 }
 
@@ -86,6 +86,16 @@ variable "argocd_namespace" {
 
 variable "gitops_repo_url" {
   description = "HTTPS URL of the GitOps repository that contains cluster-config.yaml files and ArgoCD ApplicationSets."
+  type        = string
+}
+
+variable "github_actions_repo" {
+  description = "GitHub repository in org/repo format that GitHub Actions runs from. Used to scope the OIDC trust policy so only workflows in this repository can assume the GitHubActionsEKSUpgradeRole. Example: aws-samples/sample-eks-upgrade-gitops-argocd"
+  type        = string
+}
+
+variable "tf_state_bucket" {
+  description = "Name of the S3 bucket used for Terraform remote state. Must match the bucket passed to terraform init -backend-config=bucket=... and the TF_STATE_BUCKET GitHub secret."
   type        = string
 }
 

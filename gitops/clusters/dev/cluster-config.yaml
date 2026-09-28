@@ -8,15 +8,17 @@ metadata:
     managed-by: argocd
 data:
   cluster_name: "my-eks-cluster"
-  kubernetes_version: "1.32"
+  kubernetes_version: "1.36"
   aws_region: "us-east-1"
   environment: "dev"
   node_group_min_size: "2"
   node_group_max_size: "4"
   node_group_desired_size: "2"
-  coredns_version: "v1.11.4-eksbuild.51"
-  kube_proxy_version: "v1.32.13-eksbuild.24"
-  vpc_cni_version: "v1.23.0-eksbuild.1"
-  ebs_csi_version: "v1.65.0-eksbuild.1"
+  # Add-on versions for Kubernetes 1.36 — verify current values at:
+  # https://docs.aws.amazon.com/eks/latest/userguide/managing-add-ons.html
+  coredns_version: "v1.11.4-eksbuild.14"
+  kube_proxy_version: "v1.36.3-eksbuild.2"
+  vpc_cni_version: "v1.24.0-eksbuild.1"
+  ebs_csi_version: "v1.38.0-eksbuild.1"
   auto_sync: "true"
   upgrade_window: "weekday"

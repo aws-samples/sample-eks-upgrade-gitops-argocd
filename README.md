@@ -129,7 +129,7 @@ Both use [`selfHeal: true`](https://argo-cd.readthedocs.io/en/stable/user-guide/
 - An AWS account with permissions to create VPCs, EKS clusters, IAM roles, OIDC providers, and S3 buckets
 - A fork of this repository, which Argo CD will read from
 - Local tooling:
-  - [Terraform](https://developer.hashicorp.com/terraform/install) ≥ 1.6 — required for S3 native state locking
+  - [Terraform](https://developer.hashicorp.com/terraform/install) ≥ 1.11.0 — required for S3 native state locking (`use_lockfile = true` is GA in 1.11.0+)
   - [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html), configured with credentials
   - [kubectl](https://kubernetes.io/docs/tasks/tools/), within one minor version of your cluster per the [version skew policy](https://kubernetes.io/releases/version-skew-policy/)
   - [Helm 3](https://helm.sh/docs/intro/install/)
@@ -158,24 +158,24 @@ The node group typically dominates. To reduce cost while testing, lower `node_gr
 
 ### 1. Fork the repository and set your repository URL
 
-Argo CD pulls manifests over HTTPS, so it needs a URL it can reach. The repository ships with a `<your-org>` placeholder that must be replaced in five files:
+Argo CD pulls manifests over HTTPS, so it needs a URL it can reach. The repository ships with two placeholders that must be replaced before deploying:
+
+- `<your-org>` — your GitHub organisation or username
+- `<your-tf-state-bucket>` — the name of your Terraform state S3 bucket (created in step 2)
 
 ```bash
-git clone https://github.com/<your-org>/eks-upgrade-gitops-argocd.git
-cd eks-upgrade-gitops-argocd
+git clone https://github.com/<your-org>/sample-eks-upgrade-gitops-argocd.git
+cd sample-eks-upgrade-gitops-argocd
 
-# Substitute your org or user in the ApplicationSets and all three tfvars
+# Replace both placeholders in the ApplicationSets and all three tfvars
 grep -rl '<your-org>' gitops/ terraform/environments/ \
   | xargs sed -i.bak "s|<your-org>|YOUR_ORG|g" && find . -name '*.bak' -delete
+
+grep -rl '<your-tf-state-bucket>' terraform/environments/ \
+  | xargs sed -i.bak "s|<your-tf-state-bucket>|YOUR_STATE_BUCKET|g" && find . -name '*.bak' -delete
 ```
 
-Also update the CI trust condition in `terraform/iam.tf`, which is pinned to the upstream sample repository:
-
-```hcl
-values = ["repo:<your-org>/eks-upgrade-gitops-argocd:*"]
-```
-
-Leaving it unchanged means no workflow in *your* repository can assume the role.
+The CI trust policy in `terraform/iam.tf` is driven by the `github_actions_repo` variable in each `environments/*.tfvars` — no manual file edit is needed. The OIDC role will only be assumable from the repository value you set there.
 
 ### 2. Create the Terraform state bucket
 
@@ -277,7 +277,7 @@ Amazon EKS supports one minor version at a time. Going from 1.30 to 1.32 means 1
 
 ```bash
 export CLUSTER_NAME="my-eks-cluster"
-export TARGET_VERSION="1.32"
+export TARGET_VERSION="1.36"
 export AWS_REGION="us-east-1"
 
 ./scripts/pre-upgrade-checks.sh
@@ -393,13 +393,9 @@ The VPC CNI and EBS CSI add-ons authenticate through [IAM roles for service acco
 
 Read these before adapting the sample.
 
-**No CI workflow is included.** `iam.tf` provisions the GitHub OIDC provider and the `GitHubActionsEKSUpgradeRole`, and `outputs.tf` exposes its ARN as `github_actions_role_arn`, but there is no `.github/workflows/` directory. The upgrade flow above is therefore run manually. To automate it, add a workflow that assumes the role via OIDC and calls the scripts and Terraform in order, following [Configuring OpenID Connect in Amazon Web Services](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services). Use OIDC role assumption rather than long-lived `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` secrets, which is what the provisioned role exists for.
+**A GitHub Actions workflow is included.** `.github/workflows/eks-upgrade.yml` automates the full upgrade pipeline across four jobs: `validate` (pluto API scan + `terraform fmt`/`validate`), `terraform-plan` (posts the plan as a PR comment), `terraform-apply` (runs on push; gated by GitHub environment protection rules for staging and prod), and `argocd-sync` (syncs add-ons and runs post-upgrade validation). Authentication uses OIDC — the workflow assumes `GitHubActionsEKSUpgradeRole` via `role-to-assume` and requires no long-lived AWS credentials. Required GitHub secrets: `AWS_ROLE_ARN`, `TF_STATE_BUCKET`, `ARGOCD_SERVER`, `ARGOCD_TOKEN`. Required variable: `AWS_REGION`.
 
 **Argo CD records add-on versions; Terraform sets them.** The `gitops/addons` chart renders a ConfigMap of desired versions. It does not call the EKS API, so it does not itself change deployed add-ons. Actual add-on versions come from the `cluster_addons` block in `eks.tf`, which uses `most_recent = true`. The pinned versions in `cluster-config.yaml` are consequently a *record* of intent rather than the effective source of truth, and the two can diverge. To make Git authoritative, pass those values into Terraform's `cluster_addons` as `addon_version` and drop `most_recent`.
-
-**The CI role's S3 permissions may not match the backend bucket.** `iam.tf` grants access to `${var.cluster_name}-tf-state`, while the backend bucket is whatever you pass to `terraform init -backend-config="bucket=..."`. Align them before wiring up CI.
-
-**The CI role carries unused DynamoDB permissions.** A `TerraformStateLock` statement grants access to a `terraform-state-lock` table, left over from DynamoDB-based locking. This configuration uses S3 native locking, so the statement can be removed.
 
 **Argo CD is served without TLS.** `argocd.tf` sets `--insecure` and `server.insecure = true` behind a `LoadBalancer`. Acceptable when TLS terminates at the load balancer or ingress; for production, follow the Argo CD [TLS configuration guide](https://argo-cd.readthedocs.io/en/stable/operator-manual/tls/), for example with [cert-manager](https://cert-manager.io/docs/).
 
