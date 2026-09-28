@@ -7,7 +7,7 @@ spec:
   generators:
     - git:
         # Replace with your own fork of this repository before applying.
-        repoURL: https://github.com/<your-org>/eks-upgrade-gitops-argocd
+        repoURL: https://github.com/<your-org>/sample-eks-upgrade-gitops-argocd
         revision: HEAD
         files:
           - path: "gitops/clusters/*/cluster-config.yaml"
@@ -22,7 +22,7 @@ spec:
       project: eks-upgrades
       source:
         # Replace with your own fork of this repository before applying.
-        repoURL: https://github.com/<your-org>/eks-upgrade-gitops-argocd
+        repoURL: https://github.com/<your-org>/sample-eks-upgrade-gitops-argocd
         targetRevision: HEAD
         path: "gitops/addons"
         helm:
