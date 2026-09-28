@@ -30,7 +30,7 @@ This sample provisions a complete working environment — VPC, EKS cluster, mana
 
 ## Architecture
 
-![Amazon EKS upgrade architecture: a Git-declared kubernetes_version drives a CI pipeline in which Terraform upgrades the EKS control plane and node group while Argo CD reconciles cluster add-on state](./Architecture_Diagram.png)
+![Amazon EKS upgrade architecture: a Git-declared kubernetes_version drives a CI pipeline in which Terraform upgrades the EKS control plane and node group while Argo CD reconciles cluster add-on state](./docs/architecture-diagram.png)
 
 > **Note on the diagram.** It shows the full reference architecture, including a CI pipeline and notification topic. This repository contains the Terraform, GitOps manifests, and validation scripts. It does **not** include a CI workflow — see [Known limitations](#known-limitations). The Terraform does provision the GitHub OIDC provider and IAM role that such a pipeline would assume.
 
