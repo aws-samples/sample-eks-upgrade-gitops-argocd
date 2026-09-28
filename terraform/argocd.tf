@@ -29,6 +29,9 @@ resource "helm_release" "argocd" {
         cm = {
           # Allow applications in any namespace to be managed by ArgoCD ApplicationSets.
           "application.resourceTrackingMethod" = "annotation"
+          # Let the admin account issue API tokens for the GitHub Actions workflow.
+          # For production, create a dedicated CI account with narrower RBAC instead.
+          "accounts.admin" = "apiKey, login"
         }
       }
 

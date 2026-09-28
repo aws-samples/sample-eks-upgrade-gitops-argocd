@@ -245,7 +245,7 @@ argocd login localhost:8080 --username admin --plaintext
 A public fork needs no credentials. For a private fork, supply a token scoped to read that repository only:
 
 ```bash
-argocd repo add https://github.com/<your-org>/eks-upgrade-gitops-argocd \
+argocd repo add https://github.com/<your-org>/sample-eks-upgrade-gitops-argocd \
   --username not-used --password "$GITHUB_TOKEN"
 ```
 

@@ -25,7 +25,7 @@ terraform {
     #   terraform init -backend-config="bucket=<your-unique-bucket>"
     # Use an account-specific or random suffix for global uniqueness.
     bucket       = ""
-    key          = "eks-upgrade-gitops/terraform.tfstate"
+    key          = "eks-upgrade-gitops/dev/terraform.tfstate" # the workflow sets eks-upgrade-gitops/<environment>/terraform.tfstate
     region       = "us-east-1"
     use_lockfile = true
     encrypt      = true

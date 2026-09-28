@@ -209,7 +209,7 @@ jobs:
         run: |
           terraform init \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="key=eks-upgrade-gitops/terraform.tfstate" \
+            -backend-config="key=eks-upgrade-gitops/${{ steps.env.outputs.environment }}/terraform.tfstate" \
             -backend-config="region=$AWS_REGION"
 
       - name: Terraform plan
@@ -249,7 +249,7 @@ jobs:
             </details>
 
             **Review the plan above before approving this pull request.**
-            The plan must only show changes to \`cluster_version\` and node group AMI IDs for a version upgrade.
+            This is a full plan. For a version upgrade, expect changes to the cluster version, the node group version, and possibly the EKS add-ons. The apply that follows is targeted to the cluster and node group only.
             `;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -311,7 +311,7 @@ jobs:
         run: |
           terraform init \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="key=eks-upgrade-gitops/terraform.tfstate" \
+            -backend-config="key=eks-upgrade-gitops/${{ steps.env.outputs.environment }}/terraform.tfstate" \
             -backend-config="region=$AWS_REGION"
 
       - name: Terraform apply

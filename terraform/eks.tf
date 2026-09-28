@@ -48,7 +48,8 @@ module "eks" {
   eks_managed_node_groups = {
     primary = {
       instance_types = var.node_group_instance_types
-      ami_type       = "AL2_x86_64"
+      # EKS publishes no Amazon Linux 2 AMIs for Kubernetes 1.33 and later.
+      ami_type = "AL2023_x86_64_STANDARD"
 
       min_size     = var.node_group_min_size
       max_size     = var.node_group_max_size

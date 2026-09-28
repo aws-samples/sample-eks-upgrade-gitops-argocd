@@ -60,6 +60,7 @@ data "aws_iam_policy_document" "github_actions_eks_upgrade_permissions" {
       "eks:UpdateClusterVersion",
       "eks:DescribeNodegroup",
       "eks:UpdateNodegroupVersion",
+      "eks:UpdateNodegroupConfig",
       "eks:ListNodegroups",
       "eks:DescribeUpdate",
       "eks:ListUpdates",
@@ -100,19 +101,65 @@ data "aws_iam_policy_document" "github_actions_eks_upgrade_permissions" {
     resources = ["*"]
   }
 
-  # EC2 permissions needed by Terraform EKS module to read VPC and subnet metadata.
+  # Read-only EC2 access. terraform plan refreshes the VPC, subnets, route
+  # tables, NAT gateway, Elastic IP, security groups, and launch templates that
+  # this configuration manages. EC2 Describe actions don't support
+  # resource-level permissions, so the resource must be "*".
   statement {
-    sid    = "EC2ReadForEKSModule"
+    sid       = "EC2ReadForRefresh"
+    effect    = "Allow"
+    actions   = ["ec2:Describe*"]
+    resources = ["*"]
+  }
+
+  # Read-only EKS access that isn't scoped to the cluster ARN: add-on version
+  # lookups (most_recent = true) and the cluster creator's access entry.
+  statement {
+    sid    = "EKSReadForRefresh"
     effect = "Allow"
     actions = [
-      "ec2:DescribeVpcs",
-      "ec2:DescribeSubnets",
-      "ec2:DescribeSecurityGroups",
-      "ec2:DescribeRouteTables",
-      "ec2:DescribeInternetGateways",
-      "ec2:DescribeAvailabilityZones",
-      "ec2:DescribeLaunchTemplates",
-      "ec2:DescribeLaunchTemplateVersions",
+      "eks:DescribeAddonVersions",
+      "eks:DescribeAccessEntry",
+      "eks:ListAccessEntries",
+      "eks:ListAssociatedAccessPolicies",
+      "eks:ListTagsForResource",
+    ]
+    resources = ["*"]
+  }
+
+  # Read-only IAM access. terraform plan refreshes the cluster and node IAM
+  # roles, the IRSA roles, the EKS and GitHub OIDC providers, and this role.
+  statement {
+    sid    = "IAMReadForRefresh"
+    effect = "Allow"
+    actions = [
+      "iam:GetRole",
+      "iam:GetRolePolicy",
+      "iam:ListRolePolicies",
+      "iam:ListAttachedRolePolicies",
+      "iam:ListInstanceProfilesForRole",
+      "iam:GetPolicy",
+      "iam:GetPolicyVersion",
+      "iam:ListPolicyVersions",
+      "iam:GetOpenIDConnectProvider",
+    ]
+    resources = ["*"]
+  }
+
+  # Read-only access to the KMS key and CloudWatch log group that the EKS
+  # module creates for secrets encryption and control plane logs.
+  statement {
+    sid    = "KMSAndLogsReadForRefresh"
+    effect = "Allow"
+    actions = [
+      "kms:DescribeKey",
+      "kms:GetKeyPolicy",
+      "kms:GetKeyRotationStatus",
+      "kms:ListResourceTags",
+      "kms:ListAliases",
+      "logs:DescribeLogGroups",
+      "logs:ListTagsForResource",
+      "logs:ListTagsLogGroup",
     ]
     resources = ["*"]
   }
