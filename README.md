@@ -53,7 +53,7 @@ Argo CD runs alongside this. It reads every `cluster-config.yaml` through a [Git
 
 ```
 Developer edits gitops/clusters/<env>/cluster-config.yaml
-  kubernetes_version: "1.31" -> "1.32"
+  kubernetes_version: "1.35" -> "1.36"
          │
          ├──────────────────────────────┐
          │                              │
@@ -269,7 +269,7 @@ kubectl get configmap -n kube-system | grep -E 'eks-addon-desired-versions|eks-u
 
 ## Performing an upgrade
 
-Amazon EKS supports one minor version at a time. Going from 1.30 to 1.32 means 1.30 → 1.31 → 1.32, and both the Terraform variable validation and `pre-upgrade-checks.sh` enforce this. Before picking a target, check which versions are currently available and where they sit in the support lifecycle: [Kubernetes versions](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html), [standard and extended support](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions-standard.html), and [EKS platform versions](https://docs.aws.amazon.com/eks/latest/userguide/platform-versions.html).
+Amazon EKS supports one minor version at a time. Going from 1.34 to 1.36 means 1.34 → 1.35 → 1.36 — two separate upgrade runs — and both the Terraform variable validation and `pre-upgrade-checks.sh` enforce this. Before picking a target, check which versions are currently available and where they sit in the support lifecycle: [Kubernetes versions](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html), [standard and extended support](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions-standard.html), and [EKS platform versions](https://docs.aws.amazon.com/eks/latest/userguide/platform-versions.html).
 
 [Cluster insights](https://docs.aws.amazon.com/eks/latest/userguide/cluster-insights.html) is worth running first as well. EKS checks your cluster for known upgrade blockers and reports them against the next version.
 
@@ -289,16 +289,16 @@ A non-zero exit means something would make the upgrade unsafe. Resolve it before
 
 ```yaml
 data:
-  kubernetes_version: "1.32"                    # was "1.31"
-  kube_proxy_version: "v1.32.13-eksbuild.24"    # match the new minor version
-  coredns_version: "v1.11.4-eksbuild.51"
+  kubernetes_version: "1.36"                    # was "1.35"
+  kube_proxy_version: "v1.36.3-eksbuild.2"      # match the new minor version
+  coredns_version: "v1.11.4-eksbuild.14"
 ```
 
 Add-on versions compatible with a given Kubernetes version are listed by [`aws eks describe-addon-versions`](https://docs.aws.amazon.com/cli/latest/reference/eks/describe-addon-versions.html):
 
 ```bash
 aws eks describe-addon-versions \
-  --addon-name kube-proxy --kubernetes-version 1.32 \
+  --addon-name kube-proxy --kubernetes-version 1.36 \
   --query 'addons[].addonVersions[].addonVersion' --output table
 ```
 
@@ -320,7 +320,7 @@ The control plane upgrades first, then add-ons, then the node group rolls. Argo 
 
 ```bash
 export CLUSTER_NAME="my-eks-cluster"
-export EXPECTED_VERSION="1.32"
+export EXPECTED_VERSION="1.36"
 export AWS_REGION="us-east-1"
 
 ./scripts/post-upgrade-validation.sh
@@ -371,7 +371,7 @@ Full descriptions live in `terraform/variables.tf`.
 |---|---|---|
 | `cluster_name` | *(required)* | Cluster name, used as a resource prefix |
 | `gitops_repo_url` | *(required)* | HTTPS URL of your fork; scopes the AppProject |
-| `kubernetes_version` | `1.32` | Target version. Validated against `1.28`–`1.39` |
+| `kubernetes_version` | `1.36` | Target version in EKS standard support. Check the [EKS release calendar](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html) for current supported versions. |
 | `environment` | `dev` | One of `dev`, `staging`, `prod` |
 | `aws_region` | `us-east-1` | Deployment Region |
 | `vpc_id` | `""` | Reuse an existing VPC; empty creates one |
@@ -424,7 +424,7 @@ kubectl get appproject eks-upgrades -n argocd -o jsonpath='{.spec.sourceRepos}'
 
 ```bash
 aws eks describe-cluster --name "$CLUSTER_NAME" --query 'cluster.version'
-aws eks describe-addon-versions --kubernetes-version 1.32 --query 'addons[0]' >/dev/null
+aws eks describe-addon-versions --kubernetes-version 1.36 --query 'addons[0]' >/dev/null
 ```
 
 **Node group update stalls.** Almost always a PodDisruptionBudget that cannot be satisfied, which check 4 of the pre-upgrade script is designed to catch:
