@@ -5,7 +5,7 @@
 #
 # Required environment variables:
 #   CLUSTER_NAME     - EKS cluster name
-#   TARGET_VERSION   - Target Kubernetes version (e.g., "1.31")
+#   TARGET_VERSION   - Target Kubernetes version (e.g., "1.36")
 #   AWS_REGION       - AWS region (e.g., "us-east-1")
 
 set -euo pipefail
