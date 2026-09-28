@@ -9,15 +9,17 @@ metadata:
 data:
   note: "demo-only-multi-cluster-not-deployed"
   cluster_name: "eks-staging-cluster"
-  kubernetes_version: "1.31"
+  kubernetes_version: "1.35"
   aws_region: "us-east-1"
   environment: "staging"
   node_group_min_size: "2"
   node_group_max_size: "6"
   node_group_desired_size: "3"
-  coredns_version: "v1.11.3-eksbuild.1"
-  kube_proxy_version: "v1.31.2-eksbuild.3"
-  vpc_cni_version: "v1.18.5-eksbuild.1"
-  ebs_csi_version: "v1.36.0-eksbuild.1"
+  # Add-on versions for Kubernetes 1.35 — verify current values at:
+  # https://docs.aws.amazon.com/eks/latest/userguide/managing-add-ons.html
+  coredns_version: "v1.11.4-eksbuild.10"
+  kube_proxy_version: "v1.35.3-eksbuild.2"
+  vpc_cni_version: "v1.23.2-eksbuild.1"
+  ebs_csi_version: "v1.37.0-eksbuild.1"
   auto_sync: "false"
   upgrade_window: "weekend"
